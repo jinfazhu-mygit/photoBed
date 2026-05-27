@@ -57,7 +57,7 @@ export default function App() {
       </Content>
 
       <Footer className="app-footer">
-        图片存储于 GitHub 仓库 · 由 GitHub Pages 提供访问
+        图片存储于 GitHub 仓库 · 由GitHub Pages提供访问
       </Footer>
     </Layout>
   );
