@@ -96,6 +96,51 @@ body {
   line-height: 1.5;
 }
 
+.pending-block {
+  padding: 12px;
+  background: #fafafa;
+  border: 1px dashed #d9d9d9;
+  border-radius: 10px;
+}
+
+.pending-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.pending-previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pending-preview-item {
+  width: 88px;
+  text-align: center;
+}
+
+.pending-preview-item img {
+  width: 88px;
+  height: 88px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+  background: #fff;
+}
+
+.pending-preview-name {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  max-width: 88px;
+}
+
+.upload-actions {
+  margin-top: 4px;
+}
+
 .upload-intro {
   display: flex;
   align-items: center;

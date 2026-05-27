@@ -32,6 +32,12 @@ export function stripImageExtension(name: string): string {
   return name.trim().replace(IMAGE_EXT_PATTERN, '').trim();
 }
 
+/** 选图后填入输入框的建议名（不含扩展名） */
+export function getSuggestedBaseName(file: File): string {
+  const base = stripImageExtension(file.name);
+  return base || 'image';
+}
+
 function sanitizeBaseName(base: string): string {
   return base
     .replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
