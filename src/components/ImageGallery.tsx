@@ -9,7 +9,6 @@ import {
   Card,
   Empty,
   Pagination,
-  Popconfirm,
   Segmented,
   Space,
   Spin,
@@ -21,6 +20,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PreviewableImage from './PreviewableImage';
+import PasswordModal from './PasswordModal';
 import { deleteImage, listImages } from '../services/github';
 import { useIsMobile } from '../hooks/useIsMobile';
 import type { ImageItem } from '../types';
@@ -63,6 +63,9 @@ export default function ImageGallery({ refreshKey }: Props) {
   const [mobilePage, setMobilePage] = useState(1);
   const [selectedRows, setSelectedRows] = useState<ImageItem[]>([]);
   const [deleting, setDeleting] = useState(false);
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ImageItem | null>(null);
+  const [isBatchDelete, setIsBatchDelete] = useState(false);
   const isMobile = useIsMobile();
 
   const load = useCallback(async () => {
@@ -89,37 +92,57 @@ export default function ImageGallery({ refreshKey }: Props) {
   }, [images.length, mobilePage]);
 
   const handleDelete = async (item: ImageItem) => {
-    try {
-      await deleteImage(item);
-      message.success('已删除');
-      load();
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : '删除失败');
-    }
+    setDeleteTarget(item);
+    setIsBatchDelete(false);
+    setPasswordModalVisible(true);
   };
 
   const handleBatchDelete = async () => {
     if (selectedRows.length === 0) return;
+    setDeleteTarget(null);
+    setIsBatchDelete(true);
+    setPasswordModalVisible(true);
+  };
+
+  const handlePasswordConfirm = async () => {
+    setPasswordModalVisible(false);
     setDeleting(true);
-    let successCount = 0;
-    let failCount = 0;
-    for (const item of selectedRows) {
+
+    if (isBatchDelete && selectedRows.length > 0) {
+      let successCount = 0;
+      let failCount = 0;
+      for (const item of selectedRows) {
+        try {
+          await deleteImage(item);
+          successCount++;
+        } catch {
+          failCount++;
+        }
+      }
+      if (successCount > 0) {
+        message.success(`成功删除 ${successCount} 张图片`);
+      }
+      if (failCount > 0) {
+        message.error(`${failCount} 张图片删除失败`);
+      }
+      setSelectedRows([]);
+    } else if (deleteTarget) {
       try {
-        await deleteImage(item);
-        successCount++;
-      } catch {
-        failCount++;
+        await deleteImage(deleteTarget);
+        message.success('已删除');
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : '删除失败');
       }
     }
+
     setDeleting(false);
-    setSelectedRows([]);
-    if (successCount > 0) {
-      message.success(`成功删除 ${successCount} 张图片`);
-    }
-    if (failCount > 0) {
-      message.error(`${failCount} 张图片删除失败`);
-    }
     load();
+  };
+
+  const handlePasswordCancel = () => {
+    setPasswordModalVisible(false);
+    setDeleteTarget(null);
+    setIsBatchDelete(false);
   };
 
   const mobilePageData = useMemo(() => {
@@ -190,13 +213,14 @@ export default function ImageGallery({ refreshKey }: Props) {
               onClick={() => copyText(formatCopy(record, 'markdown'))}
             />
           </Tooltip>
-          <Popconfirm
-            title="确定删除该图片？"
-            description="将从 GitHub 仓库中永久删除"
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          <Tooltip title="删除图片">
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDelete(record)}
+            />
+          </Tooltip>
         </Space>
       ),
     },
@@ -239,15 +263,9 @@ export default function ImageGallery({ refreshKey }: Props) {
         >
           MD
         </Button>
-        <Popconfirm
-          title="确定删除？"
-          description="将从仓库永久删除"
-          onConfirm={() => handleDelete(item)}
-        >
-          <Button block danger icon={<DeleteOutlined />}>
-            删除
-          </Button>
-        </Popconfirm>
+        <Button block danger icon={<DeleteOutlined />} onClick={() => handleDelete(item)}>
+          删除
+        </Button>
       </div>
     </article>
   );
@@ -260,102 +278,106 @@ export default function ImageGallery({ refreshKey }: Props) {
   };
 
   return (
-    <Card
-      className="gallery-card surface-card"
-      title={<span className="card-title-text">全部图片（{images.length}）</span>}
-      bordered={false}
-      extra={
-        !isMobile ? (
-          <Space wrap className="gallery-toolbar-desktop">
-            {copyFormatControl}
-            <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
-              刷新
-            </Button>
-            <Popconfirm
-              title="确定批量删除？"
-              description={`将永久删除选中的 ${selectedRows.length} 张图片`}
-              onConfirm={handleBatchDelete}
-              disabled={selectedRows.length === 0}
-            >
+    <>
+      <Card
+        className="gallery-card surface-card"
+        title={<span className="card-title-text">全部图片（{images.length}）</span>}
+        bordered={false}
+        extra={
+          !isMobile ? (
+            <Space wrap className="gallery-toolbar-desktop">
+              {copyFormatControl}
+              <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
+                刷新
+              </Button>
               <Button
                 danger
                 disabled={selectedRows.length === 0}
                 loading={deleting}
                 icon={<DeleteOutlined />}
+                onClick={handleBatchDelete}
               >
                 批量删除
               </Button>
-            </Popconfirm>
-          </Space>
-        ) : undefined
-      }
-    >
-      {isMobile && (
-        <div className="card-toolbar-mobile">
-          {copyFormatControl}
-          <Button
-            className="toolbar-refresh-btn"
-            icon={<ReloadOutlined />}
-            onClick={load}
-            loading={loading}
-            block
-          >
-            刷新列表
-          </Button>
-        </div>
-      )}
-
-      {!isMobile && selectedRows.length > 0 && (
-        <div className="gallery-batch-hint">
-          已选择 {selectedRows.length} 项
-        </div>
-      )}
-
-      <Spin spinning={loading}>
-        {images.length === 0 && !loading ? (
-          <Empty className="gallery-empty" description="暂无图片，去上传一张吧" />
-        ) : isMobile ? (
-          <>
-            <div className="gallery-mobile-list">
-              {mobilePageData.map(renderMobileItem)}
-            </div>
-            {images.length > 0 && (
-              <Pagination
-                className="gallery-mobile-pagination"
-                current={mobilePage}
-                pageSize={MOBILE_PAGE_SIZE}
-                total={images.length}
-                onChange={setMobilePage}
-                hideOnSinglePage={false}
-                simple
-                showSizeChanger={false}
-                size="small"
-                showTotal={(total) => `共 ${total} 张`}
-              />
-            )}
-          </>
-        ) : (
-          <div className="gallery-table-wrap">
-            <Table
-              rowKey="sha"
-              columns={columns}
-              dataSource={images}
+            </Space>
+          ) : undefined
+        }
+      >
+        {isMobile && (
+          <div className="card-toolbar-mobile">
+            {copyFormatControl}
+            <Button
+              className="toolbar-refresh-btn"
+              icon={<ReloadOutlined />}
+              onClick={load}
               loading={loading}
-              rowSelection={rowSelection}
-              pagination={{
-                pageSize: DESKTOP_PAGE_SIZE,
-                showSizeChanger: true,
-                showTotal: (t) => `共 ${t} 张`,
-              }}
-              size="middle"
-              scroll={{ x: 640 }}
-            />
+              block
+            >
+              刷新列表
+            </Button>
           </div>
         )}
-      </Spin>
-      <Typography.Paragraph type="secondary" className="gallery-hint">
-        Pages 链接在 GitHub Actions 部署完成后生效；Raw 链接上传后立即可用。
-      </Typography.Paragraph>
-    </Card>
+
+        {!isMobile && selectedRows.length > 0 && (
+          <div className="gallery-batch-hint">
+            已选择 {selectedRows.length} 项
+          </div>
+        )}
+
+        <Spin spinning={loading}>
+          {images.length === 0 && !loading ? (
+            <Empty className="gallery-empty" description="暂无图片，去上传一张吧" />
+          ) : isMobile ? (
+            <>
+              <div className="gallery-mobile-list">
+                {mobilePageData.map(renderMobileItem)}
+              </div>
+              {images.length > 0 && (
+                <Pagination
+                  className="gallery-mobile-pagination"
+                  current={mobilePage}
+                  pageSize={MOBILE_PAGE_SIZE}
+                  total={images.length}
+                  onChange={setMobilePage}
+                  hideOnSinglePage={false}
+                  simple
+                  showSizeChanger={false}
+                  size="small"
+                  showTotal={(total) => `共 ${total} 张`}
+                />
+              )}
+            </>
+          ) : (
+            <div className="gallery-table-wrap">
+              <Table
+                rowKey="sha"
+                columns={columns}
+                dataSource={images}
+                loading={loading}
+                rowSelection={rowSelection}
+                pagination={{
+                  pageSize: DESKTOP_PAGE_SIZE,
+                  showSizeChanger: true,
+                  showTotal: (t) => `共 ${t} 张`,
+                }}
+                size="middle"
+                scroll={{ x: 640 }}
+              />
+            </div>
+          )}
+        </Spin>
+        <Typography.Paragraph type="secondary" className="gallery-hint">
+          Pages 链接在 GitHub Actions 部署完成后生效；Raw 链接上传后立即可用。
+        </Typography.Paragraph>
+      </Card>
+
+      <PasswordModal
+        visible={passwordModalVisible}
+        onCancel={handlePasswordCancel}
+        onConfirm={handlePasswordConfirm}
+        title="身份验证"
+        description="请输入管理员密码以确认删除操作"
+      />
+    </>
   );
 }

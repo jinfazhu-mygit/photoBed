@@ -750,3 +750,73 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ─── Password Modal ─── */
+.password-modal .ant-modal-content {
+  border-radius: var(--radius-lg);
+}
+
+.password-modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.password-modal-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  font-size: 24px;
+  color: #fff;
+}
+
+.password-modal-desc {
+  text-align: center;
+  color: var(--color-text-secondary);
+  margin: 0 0 16px !important;
+  font-size: 14px;
+}
+
+.password-input {
+  width: 100%;
+  max-width: 280px;
+  margin-bottom: 8px;
+}
+
+.password-error {
+  font-size: 12px;
+  margin-top: 4px;
+  display: block;
+}
+
+@media (max-width: 767px) {
+  .password-modal .ant-modal-content {
+    margin: 16px;
+    border-radius: var(--radius-lg);
+  }
+
+  .password-modal .ant-modal-body {
+    padding: 16px;
+  }
+
+  .password-modal-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+
+  .password-modal-desc {
+    font-size: 13px;
+  }
+
+  .password-input {
+    max-width: 100%;
+  }
+}
