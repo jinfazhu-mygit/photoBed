@@ -272,9 +272,12 @@ export default function ImageGallery({ refreshKey }: Props) {
   );
 
   const rowSelection = {
+    type: 'checkbox' as const,
     selectedRowKeys: selectedRows.map(item => item.sha),
-    onChange: (_: React.Key[], selectedItems: ImageItem[]) => {
-      setSelectedRows(selectedItems);
+    onChange: (selectedKeys: React.Key[]) => {
+      const keys = new Set(selectedKeys);
+      const newSelectedRows = images.filter(item => keys.has(item.sha));
+      setSelectedRows(newSelectedRows);
     },
   };
 
