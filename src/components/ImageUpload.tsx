@@ -10,7 +10,6 @@ import {
 import {
   Button,
   Card,
-  Form,
   Input,
   List,
   Progress,
@@ -22,9 +21,9 @@ import {
   message,
 } from 'antd';
 import type { UploadProps } from 'antd';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { uploadImage, uploadImages, validateImageFile } from '../services/github';
-import { getSuggestedBaseName, stripImageExtension } from '../utils/filename';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { uploadImages, validateImageFile } from '../services/github';
+import { getImageExtension, getSuggestedBaseName, stripImageExtension } from '../utils/filename';
 import type { UploadResult } from '../types';
 
 interface Props {
@@ -34,8 +33,10 @@ interface Props {
 type LinkFormat = 'pages' | 'raw' | 'markdown' | 'html';
 
 interface PendingItem {
+  id: string;
   file: File;
   previewUrl: string;
+  baseName: string;
 }
 
 function formatLink(result: UploadResult, format: LinkFormat): string {
@@ -50,25 +51,34 @@ function formatLink(result: UploadResult, format: LinkFormat): string {
   }
 }
 
+function fileKey(file: File): string {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function createPendingItem(file: File): PendingItem {
+  return {
+    id: `${fileKey(file)}-${crypto.randomUUID()}`,
+    file,
+    previewUrl: URL.createObjectURL(file),
+    baseName: getSuggestedBaseName(file),
+  };
+}
+
 async function copyText(text: string) {
   await navigator.clipboard.writeText(text);
   message.success('已复制');
 }
 
-function revokePreviewUrls(items: PendingItem[]) {
+function revokePreviewUrls(items: Pick<PendingItem, 'previewUrl'>[]) {
   items.forEach((item) => URL.revokeObjectURL(item.previewUrl));
 }
 
 export default function ImageUpload({ onUploaded }: Props) {
-  const [customName, setCustomName] = useState('');
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [recent, setRecent] = useState<UploadResult[]>([]);
   const [linkFormat, setLinkFormat] = useState<LinkFormat>('pages');
-
-  const pendingFiles = useMemo(() => pendingItems.map((item) => item.file), [pendingItems]);
-  const isSinglePending = pendingFiles.length === 1;
   const pendingItemsRef = useRef(pendingItems);
   pendingItemsRef.current = pendingItems;
 
@@ -83,70 +93,73 @@ export default function ImageUpload({ onUploaded }: Props) {
     });
   }, []);
 
-  const handleSelectFiles = useCallback(
-    (fileList: File[]) => {
-      const valid: File[] = [];
-      for (const file of fileList) {
-        const err = validateImageFile(file);
-        if (err) message.warning(`${file.name}: ${err}`);
-        else valid.push(file);
-      }
-      if (valid.length === 0) return;
+  const removePendingItem = useCallback((id: string) => {
+    setPendingItems((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (target) revokePreviewUrls([target]);
+      return prev.filter((item) => item.id !== id);
+    });
+  }, []);
 
-      clearPending();
-      const items: PendingItem[] = valid.map((file) => ({
-        file,
-        previewUrl: URL.createObjectURL(file),
-      }));
-      setPendingItems(items);
+  const updatePendingBaseName = useCallback((id: string, value: string) => {
+    const baseName = stripImageExtension(value);
+    setPendingItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, baseName } : item))
+    );
+  }, []);
 
-      if (valid.length === 1) {
-        setCustomName(getSuggestedBaseName(valid[0]));
-      } else {
-        setCustomName('');
+  const handleSelectFiles = useCallback((fileList: File[]) => {
+    const existingKeys = new Set(pendingItemsRef.current.map((item) => fileKey(item.file)));
+    const toAdd: PendingItem[] = [];
+    let skipped = 0;
+
+    for (const file of fileList) {
+      const err = validateImageFile(file);
+      if (err) {
+        message.warning(`${file.name}: ${err}`);
+        continue;
       }
-    },
-    [clearPending]
-  );
+      const key = fileKey(file);
+      if (existingKeys.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      existingKeys.add(key);
+      toAdd.push(createPendingItem(file));
+    }
+
+    if (toAdd.length === 0) {
+      if (skipped > 0) message.info('所选图片已在待上传列表中');
+      return;
+    }
+
+    setPendingItems((prev) => [...prev, ...toAdd]);
+    message.success(`已添加 ${toAdd.length} 张图片到待上传列表`);
+    if (skipped > 0) message.info(`已跳过 ${skipped} 张重复图片`);
+  }, []);
 
   const handleConfirmUpload = useCallback(async () => {
-    if (pendingFiles.length === 0) {
+    if (pendingItems.length === 0) {
       message.warning('请先选择要上传的图片');
       return;
     }
 
     setUploading(true);
-    setProgress({ done: 0, total: pendingFiles.length });
+    setProgress({ done: 0, total: pendingItems.length });
 
     try {
-      let succeeded: UploadResult[] = [];
-      const failed: { file: File; error: string }[] = [];
-
-      if (isSinglePending) {
-        try {
-          const name = customName.trim() || undefined;
-          const result = await uploadImage(pendingFiles[0], name);
-          succeeded = [result];
-          setProgress({ done: 1, total: 1 });
-        } catch (err) {
-          failed.push({
-            file: pendingFiles[0],
-            error: err instanceof Error ? err.message : '上传失败',
-          });
-        }
-      } else {
-        const result = await uploadImages(pendingFiles, (done, total) =>
-          setProgress({ done, total })
-        );
-        succeeded = result.succeeded;
-        failed.push(...result.failed);
-      }
+      const { succeeded, failed } = await uploadImages(
+        pendingItems.map((item) => ({
+          file: item.file,
+          customName: item.baseName.trim() || undefined,
+        })),
+        (done, total) => setProgress({ done, total })
+      );
 
       if (succeeded.length > 0) {
         setRecent((prev) => [...succeeded, ...prev].slice(0, 8));
         onUploaded();
         message.success(`成功上传 ${succeeded.length} 张图片`);
-        setCustomName('');
         clearPending();
       }
       failed.forEach(({ file, error }) => message.error(`${file.name}: ${error}`));
@@ -154,13 +167,7 @@ export default function ImageUpload({ onUploaded }: Props) {
       setUploading(false);
       setProgress({ done: 0, total: 0 });
     }
-  }, [
-    pendingFiles,
-    isSinglePending,
-    customName,
-    onUploaded,
-    clearPending,
-  ]);
+  }, [pendingItems, onUploaded, clearPending]);
 
   const uploadProps: UploadProps = {
     name: 'file',
@@ -188,7 +195,7 @@ export default function ImageUpload({ onUploaded }: Props) {
                 上传图片
               </Typography.Title>
               <Typography.Text type="secondary">
-                选择图片并确认后再上传，单文件最大 25MB
+                可多次选择图片加入列表，确认后一并上传，单文件最大 25MB
               </Typography.Text>
             </div>
           </div>
@@ -197,7 +204,7 @@ export default function ImageUpload({ onUploaded }: Props) {
             <p className="ant-upload-drag-icon">
               <CloudUploadOutlined />
             </p>
-            <p className="ant-upload-text">拖拽图片到此处，或点击选择文件</p>
+            <p className="ant-upload-text">拖拽或点击选择图片（可多次添加）</p>
             <p className="ant-upload-hint">JPG · PNG · GIF · WebP · SVG · BMP</p>
           </Upload.Dragger>
 
@@ -205,60 +212,60 @@ export default function ImageUpload({ onUploaded }: Props) {
             <div className="pending-block">
               <div className="pending-header">
                 <Typography.Text strong>
-                  已选择 {pendingItems.length} 个文件
+                  待上传 {pendingItems.length} 张
                 </Typography.Text>
                 <Button
                   type="text"
                   size="small"
                   danger
                   icon={<DeleteOutlined />}
-                  onClick={() => {
-                    clearPending();
-                    setCustomName('');
-                  }}
+                  onClick={clearPending}
                   disabled={uploading}
                 >
-                  清空
+                  全部清空
                 </Button>
               </div>
-              <div className="pending-previews">
-                {pendingItems.map((item) => (
-                  <div key={item.previewUrl} className="pending-preview-item">
-                    <img src={item.previewUrl} alt={item.file.name} />
-                    <Typography.Text ellipsis className="pending-preview-name">
-                      {item.file.name}
-                    </Typography.Text>
-                  </div>
+
+              <Typography.Paragraph type="secondary" className="pending-tip">
+                文件名无需填写后缀，将按各图片格式自动补全（如 .png、.jpg）
+              </Typography.Paragraph>
+
+              <ul className="pending-list">
+                {pendingItems.map((item, index) => (
+                  <li key={item.id} className="pending-list-item">
+                    <img
+                      src={item.previewUrl}
+                      alt={item.file.name}
+                      className="pending-list-thumb"
+                    />
+                    <div className="pending-list-body">
+                      <Typography.Text type="secondary" className="pending-list-origin" ellipsis>
+                        原文件：{item.file.name}
+                      </Typography.Text>
+                      <Input
+                        addonAfter={getImageExtension(item.file)}
+                        placeholder="文件名"
+                        value={item.baseName}
+                        onChange={(e) => updatePendingBaseName(item.id, e.target.value)}
+                        onBlur={(e) => updatePendingBaseName(item.id, e.target.value)}
+                        disabled={uploading}
+                        allowClear
+                      />
+                    </div>
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => removePendingItem(item.id)}
+                      disabled={uploading}
+                      aria-label={`移除第 ${index + 1} 张`}
+                    />
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
-
-          <Form.Item
-            className="upload-name-field"
-            label="自定义文件名"
-            extra={
-              isSinglePending
-                ? '仅填文件名主体，不要带 .png、.jpg 等后缀；上传后将按图片格式自动补全'
-                : pendingItems.length > 1
-                  ? '批量上传时将自动为每个文件生成文件名'
-                  : '选择单张图片后可在此修改文件名'
-            }
-          >
-            <Input
-              className="upload-name-input"
-              placeholder={
-                isSinglePending
-                  ? '例如：avatar、banner-2024'
-                  : '请先选择单张图片以自定义文件名'
-              }
-              value={customName}
-              onChange={(e) => setCustomName(stripImageExtension(e.target.value))}
-              onBlur={(e) => setCustomName(stripImageExtension(e.target.value))}
-              disabled={uploading || !isSinglePending}
-              allowClear
-            />
-          </Form.Item>
 
           <div className="upload-actions">
             <Button

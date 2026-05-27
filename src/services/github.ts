@@ -137,21 +137,27 @@ export async function uploadImage(file: File, customName?: string): Promise<Uplo
   };
 }
 
+export interface UploadItemInput {
+  file: File;
+  customName?: string;
+}
+
 export async function uploadImages(
-  files: File[],
+  items: UploadItemInput[],
   onProgress?: (done: number, total: number) => void
 ): Promise<{ succeeded: UploadResult[]; failed: { file: File; error: string }[] }> {
   const succeeded: UploadResult[] = [];
   const failed: { file: File; error: string }[] = [];
-  const total = files.length;
+  const total = items.length;
 
-  for (let i = 0; i < files.length; i++) {
+  for (let i = 0; i < items.length; i++) {
+    const { file, customName } = items[i];
     try {
-      const result = await uploadImage(files[i]);
+      const result = await uploadImage(file, customName?.trim() || undefined);
       succeeded.push(result);
     } catch (err) {
       failed.push({
-        file: files[i],
+        file,
         error: err instanceof Error ? err.message : '上传失败',
       });
     }
