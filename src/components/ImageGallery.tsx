@@ -72,6 +72,7 @@ export default function ImageGallery({ refreshKey }: Props) {
     setLoading(true);
     try {
       const list = await listImages();
+      console.log("%c Line:75 🥪 list", "color:#465975", list);
       setImages(list);
       setMobilePage(1);
       setSelectedRows([]);
@@ -227,7 +228,7 @@ export default function ImageGallery({ refreshKey }: Props) {
   ];
 
   const renderMobileItem = (item: ImageItem) => (
-    <article key={item.sha} className="gallery-mobile-item">
+    <article key={item.name} className="gallery-mobile-item">
       <div className="gallery-mobile-main">
         <PreviewableImage
           url={item.url}
@@ -272,10 +273,10 @@ export default function ImageGallery({ refreshKey }: Props) {
 
   const rowSelection = {
     type: 'checkbox' as const,
-    selectedRowKeys: selectedRows.map(item => item.sha),
+    selectedRowKeys: selectedRows.map(item => item.name),
     onChange: (selectedKeys: React.Key[]) => {
       const keys = new Set(selectedKeys);
-      const newSelectedRows = images.filter(item => keys.has(item.sha));
+      const newSelectedRows = images.filter(item => keys.has(item.name));
       setSelectedRows(newSelectedRows);
     },
   };
@@ -353,7 +354,7 @@ export default function ImageGallery({ refreshKey }: Props) {
           ) : (
             <div className="gallery-table-wrap">
               <Table
-                rowKey="sha"
+                rowKey="name"
                 columns={columns}
                 dataSource={images}
                 loading={loading}
