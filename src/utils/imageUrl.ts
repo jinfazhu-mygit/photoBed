@@ -15,8 +15,12 @@ export function encodeUrlPath(path: string): string {
     .join('/');
 }
 
-/** 预览/展示用 URL 列表：优先 Pages，其次 Raw */
+/**
+ * 预览/展示用 URL 列表
+ * 优先 Media URL（支持 LFS），其次 Pages URL
+ * Media URL 可以正确处理 LFS 文件，Pages URL 可能需要同步时间
+ */
 export function getImagePreviewSources(item: { url: string; rawUrl: string }): string[] {
-  const sources = [item.url, item.rawUrl];
+  const sources = [item.rawUrl, item.url];
   return [...new Set(sources.filter(Boolean))];
 }

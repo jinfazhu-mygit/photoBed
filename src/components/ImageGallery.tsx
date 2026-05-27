@@ -41,13 +41,14 @@ function formatSize(bytes: number): string {
 }
 
 function formatCopy(item: ImageItem, format: CopyFormat): string {
+  // 始终使用 rawUrl（Media URL）以支持 LFS 文件
   switch (format) {
     case 'raw':
       return item.rawUrl;
     case 'markdown':
-      return `![${item.name}](${item.url})`;
+      return `![${item.name}](${item.rawUrl})`;
     default:
-      return item.url;
+      return item.rawUrl;
   }
 }
 

@@ -40,7 +40,8 @@ interface PendingItem {
 }
 
 function formatLink(result: UploadResult, format: LinkFormat): string {
-  const url = format === 'raw' ? result.rawUrl : result.url;
+  // 始终使用 rawUrl（Media URL）以支持 LFS 文件
+  const url = result.rawUrl;
   switch (format) {
     case 'markdown':
       return `![${result.name}](${url})`;

@@ -7,7 +7,7 @@ const API_BASE = 'https://api.github.com';
 
 function authHeaders(token: string): HeadersInit {
   return {
-    Accept: 'application/vnd.github+json',
+    Accept: 'application/vnd.github.v3+json',
     Authorization: `Bearer ${token}`,
     'X-GitHub-Api-Version': '2022-11-28',
   };
