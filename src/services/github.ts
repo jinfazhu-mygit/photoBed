@@ -20,11 +20,18 @@ function encodePath(path: string): string {
     .join('/');
 }
 
-function buildRawUrl(config: GitHubConfig, path: string): string {
+/**
+ * 构建 Media URL（支持 LFS 文件）
+ * GitHub media API 会自动解析 LFS 文件并返回实际内容
+ */
+function buildMediaUrl(config: GitHubConfig, path: string): string {
   const { owner, repo, branch } = config;
-  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodeUrlPath(path)}`;
+  return `https://media.githubusercontent.com/media/${owner}/${repo}/${branch}/${encodeUrlPath(path)}`;
 }
 
+/**
+ * 构建 Pages URL
+ */
 function buildPagesUrl(config: GitHubConfig, path: string): string {
   const imagesDir = config.imagesDir.replace(/^\//, '').replace(/\/$/, '');
   const fullPath = path.startsWith(`${imagesDir}/`) ? path : `${imagesDir}/${path.split('/').pop() || path}`;
@@ -66,7 +73,7 @@ export async function listImages(): Promise<ImageItem[]> {
       sha: item.sha,
       size: item.size,
       url: buildPagesUrl(config, item.path),
-      rawUrl: buildRawUrl(config, item.path),
+      rawUrl: buildMediaUrl(config, item.path),
     }))
     .sort((a, b) => b.name.localeCompare(a.name));
 }
@@ -173,7 +180,7 @@ export async function uploadImage(file: File, customName?: string): Promise<Uplo
     name: fileName,
     path,
     url: buildPagesUrl(config, path),
-    rawUrl: buildRawUrl(config, path),
+    rawUrl: buildMediaUrl(config, path),
   };
 }
 
