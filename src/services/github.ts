@@ -1,6 +1,6 @@
 import { getGitHubConfig } from '../config';
 import type { GitHubConfig, ImageItem, UploadResult } from '../types';
-import { resolveUploadFileName } from '../utils/filename';
+import { resolveUploadFileName, getImageExtension } from '../utils/filename';
 import { encodeUrlPath } from '../utils/imageUrl';
 
 const API_BASE = 'https://api.github.com';
@@ -98,23 +98,63 @@ export function validateImageFile(file: File): string | null {
   return null;
 }
 
+function generateUniqueFileName(baseName: string, ext: string, existingNames: Set<string>): string {
+  let fileName = `${baseName}${ext}`;
+  if (!existingNames.has(fileName)) {
+    return fileName;
+  }
+
+  let counter = 1;
+  while (counter <= 100) {
+    const newFileName = `${baseName}(${counter})${ext}`;
+    if (!existingNames.has(newFileName)) {
+      return newFileName;
+    }
+    counter++;
+  }
+
+  const timestamp = Date.now();
+  return `${baseName}-${timestamp}${ext}`;
+}
+
+async function getExistingFileNames(config: GitHubConfig): Promise<Set<string>> {
+  try {
+    const dir = config.imagesDir.replace(/^\//, '').replace(/\/$/, '');
+    const url = `${API_BASE}/repos/${config.owner}/${config.repo}/contents/${encodePath(dir)}?ref=${encodeURIComponent(config.branch)}`;
+    const res = await fetch(url, { headers: authHeaders(config.token) });
+    if (!res.ok) return new Set();
+
+    const data = (await res.json()) as Array<{ name: string; type: string }>;
+    return new Set(data.filter(item => item.type === 'file').map(item => item.name));
+  } catch {
+    return new Set();
+  }
+}
+
 export async function uploadImage(file: File, customName?: string): Promise<UploadResult> {
   const error = validateImageFile(file);
   if (error) throw new Error(error);
 
   const config = getGitHubConfig();
   const dir = config.imagesDir.replace(/^\//, '').replace(/\/$/, '');
-  const fileName = resolveUploadFileName(file, customName);
+  const ext = getImageExtension(file);
+
+  const existingNames = await getExistingFileNames(config);
+
+  let fileName: string;
+  if (customName?.trim()) {
+    const baseName = customName.trim();
+    fileName = generateUniqueFileName(baseName, ext, existingNames);
+  } else {
+    fileName = resolveUploadFileName(file);
+    while (existingNames.has(fileName)) {
+      const base = fileName.replace(/\.[^.]+$/, '');
+      fileName = generateUniqueFileName(base, ext, existingNames);
+    }
+  }
+
   const path = `${dir}/${fileName}`;
   const content = await fileToBase64(file);
-
-  const checkUrl = `${API_BASE}/repos/${config.owner}/${config.repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(config.branch)}`;
-  let sha: string | undefined;
-  const checkRes = await fetch(checkUrl, { headers: authHeaders(config.token) });
-  if (checkRes.ok) {
-    const existing = (await checkRes.json()) as { sha: string };
-    sha = existing.sha;
-  }
 
   const putUrl = `${API_BASE}/repos/${config.owner}/${config.repo}/contents/${encodePath(path)}`;
   const res = await fetch(putUrl, {
@@ -124,7 +164,6 @@ export async function uploadImage(file: File, customName?: string): Promise<Uplo
       message: `upload: ${fileName}`,
       content,
       branch: config.branch,
-      ...(sha ? { sha } : {}),
     }),
   });
 

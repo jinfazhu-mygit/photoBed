@@ -29,8 +29,7 @@ html {
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   background: var(--color-bg);
   color: #0f172a;
   line-height: 1.5;
@@ -420,6 +419,7 @@ body {
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
+  min-height: 24px;
 }
 
 .recent-item-name {
@@ -478,6 +478,23 @@ body {
   font-size: 12px;
   color: var(--color-text-secondary) !important;
   line-height: 1.5;
+}
+
+.gallery-batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  margin: -4px -4px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.gallery-batch-count {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
 }
 
 .gallery-mobile-list {
@@ -601,7 +618,6 @@ body {
     flex: none;
     min-width: 72px;
   }
-
 }
 
 /* ─── Mobile ─── */

@@ -61,6 +61,8 @@ export default function ImageGallery({ refreshKey }: Props) {
   const [loading, setLoading] = useState(false);
   const [copyFormat, setCopyFormat] = useState<CopyFormat>('pages');
   const [mobilePage, setMobilePage] = useState(1);
+  const [selectedRows, setSelectedRows] = useState<ImageItem[]>([]);
+  const [deleting, setDeleting] = useState(false);
   const isMobile = useIsMobile();
 
   const load = useCallback(async () => {
@@ -69,6 +71,7 @@ export default function ImageGallery({ refreshKey }: Props) {
       const list = await listImages();
       setImages(list);
       setMobilePage(1);
+      setSelectedRows([]);
     } catch (err) {
       message.error(err instanceof Error ? err.message : '加载失败');
     } finally {
@@ -93,6 +96,30 @@ export default function ImageGallery({ refreshKey }: Props) {
     } catch (err) {
       message.error(err instanceof Error ? err.message : '删除失败');
     }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedRows.length === 0) return;
+    setDeleting(true);
+    let successCount = 0;
+    let failCount = 0;
+    for (const item of selectedRows) {
+      try {
+        await deleteImage(item);
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
+    setDeleting(false);
+    setSelectedRows([]);
+    if (successCount > 0) {
+      message.success(`成功删除 ${successCount} 张图片`);
+    }
+    if (failCount > 0) {
+      message.error(`${failCount} 张图片删除失败`);
+    }
+    load();
   };
 
   const mobilePageData = useMemo(() => {
@@ -225,6 +252,13 @@ export default function ImageGallery({ refreshKey }: Props) {
     </article>
   );
 
+  const rowSelection = {
+    selectedRowKeys: selectedRows.map(item => item.sha),
+    onChange: (_: React.Key[], selectedItems: ImageItem[]) => {
+      setSelectedRows(selectedItems);
+    },
+  };
+
   return (
     <Card
       className="gallery-card surface-card"
@@ -253,6 +287,25 @@ export default function ImageGallery({ refreshKey }: Props) {
           >
             刷新列表
           </Button>
+        </div>
+      )}
+
+      {!isMobile && selectedRows.length > 0 && (
+        <div className="gallery-batch-toolbar">
+          <span className="gallery-batch-count">已选择 {selectedRows.length} 项</span>
+          <Popconfirm
+            title="确定批量删除？"
+            description={`将永久删除选中的 ${selectedRows.length} 张图片`}
+            onConfirm={handleBatchDelete}
+          >
+            <Button
+              danger
+              loading={deleting}
+              icon={<DeleteOutlined />}
+            >
+              批量删除
+            </Button>
+          </Popconfirm>
         </div>
       )}
 
@@ -286,6 +339,7 @@ export default function ImageGallery({ refreshKey }: Props) {
               columns={columns}
               dataSource={images}
               loading={loading}
+              rowSelection={rowSelection}
               pagination={{
                 pageSize: DESKTOP_PAGE_SIZE,
                 showSizeChanger: true,
@@ -297,7 +351,6 @@ export default function ImageGallery({ refreshKey }: Props) {
           </div>
         )}
       </Spin>
-
       <Typography.Paragraph type="secondary" className="gallery-hint">
         Pages 链接在 GitHub Actions 部署完成后生效；Raw 链接上传后立即可用。
       </Typography.Paragraph>

@@ -3,7 +3,6 @@ import {
   CloudUploadOutlined,
   CopyOutlined,
   DeleteOutlined,
-  LinkOutlined,
   PictureOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
@@ -171,6 +170,8 @@ export default function ImageUpload({ onUploaded }: Props) {
     }
   }, [pendingItems, onUploaded, clearPending]);
 
+  const lastUploadKeyRef = useRef<string>('');
+
   const uploadProps: UploadProps = {
     name: 'file',
     multiple: true,
@@ -178,7 +179,13 @@ export default function ImageUpload({ onUploaded }: Props) {
     accept: 'image/*',
     disabled: uploading,
     beforeUpload: (_, fileList) => {
-      handleSelectFiles(fileList as unknown as File[]);
+      const files = fileList as unknown as File[];
+      const currentKey = files.map(f => fileKey(f)).sort().join('|');
+      if (currentKey === lastUploadKeyRef.current) {
+        return false;
+      }
+      lastUploadKeyRef.current = currentKey;
+      handleSelectFiles(files);
       return false;
     },
   };
@@ -383,13 +390,6 @@ export default function ImageUpload({ onUploaded }: Props) {
                       onClick={() => copyText(link)}
                     >
                       复制
-                    </Button>
-                    <Button
-                      size="small"
-                      icon={<LinkOutlined />}
-                      onClick={() => copyText(item.url)}
-                    >
-                      Pages
                     </Button>
                   </div>
                 </List.Item>
