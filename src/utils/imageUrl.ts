@@ -1,9 +1,16 @@
-/** 对路径各段进行 URL 编码（保留已编码内容） */
+/** 对路径各段进行 URL 编码（保留已编码内容），确保括号等特殊字符也被正确编码 */
 function encodeSegment(segment: string): string {
   try {
-    return encodeURIComponent(decodeURIComponent(segment));
+    // decodeURIComponent 可能失败，所以用 try-catch
+    const decoded = decodeURIComponent(segment);
+    // 对括号等特殊字符进行编码
+    return encodeURIComponent(decoded)
+      .replace(/\(/g, '%28')
+      .replace(/\)/g, '%29');
   } catch {
-    return encodeURIComponent(segment);
+    return encodeURIComponent(segment)
+      .replace(/\(/g, '%28')
+      .replace(/\)/g, '%29');
   }
 }
 
