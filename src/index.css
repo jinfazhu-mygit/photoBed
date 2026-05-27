@@ -87,6 +87,15 @@ body {
   gap: 16px;
 }
 
+.upload-name-field {
+  margin-bottom: 0;
+}
+
+.upload-name-field .ant-form-item-extra {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .upload-intro {
   display: flex;
   align-items: center;

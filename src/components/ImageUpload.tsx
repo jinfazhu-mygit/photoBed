@@ -8,6 +8,7 @@ import {
 import {
   Button,
   Card,
+  Form,
   Input,
   List,
   Progress,
@@ -21,6 +22,7 @@ import {
 import type { UploadProps } from 'antd';
 import { useCallback, useState } from 'react';
 import { uploadImage, uploadImages, validateImageFile } from '../services/github';
+import { stripImageExtension } from '../utils/filename';
 import type { UploadResult } from '../types';
 
 interface Props {
@@ -135,14 +137,21 @@ export default function ImageUpload({ onUploaded }: Props) {
             </div>
           </div>
 
-          <Input
-            className="upload-name-input"
-            placeholder="单张上传时可自定义文件名（可选）"
-            value={customName}
-            onChange={(e) => setCustomName(e.target.value)}
-            disabled={uploading}
-            allowClear
-          />
+          <Form.Item
+            className="upload-name-field"
+            label="自定义文件名"
+            extra="仅填文件名主体，不要带 .png、.jpg 等后缀；上传后将按图片格式自动补全"
+          >
+            <Input
+              className="upload-name-input"
+              placeholder="例如：avatar、banner-2024（单张上传时生效）"
+              value={customName}
+              onChange={(e) => setCustomName(stripImageExtension(e.target.value))}
+              onBlur={(e) => setCustomName(stripImageExtension(e.target.value))}
+              disabled={uploading}
+              allowClear
+            />
+          </Form.Item>
 
           <Upload.Dragger {...uploadProps} className="upload-dragger">
             <p className="ant-upload-drag-icon">

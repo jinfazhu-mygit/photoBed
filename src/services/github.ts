@@ -1,5 +1,6 @@
 import { getGitHubConfig } from '../config';
 import type { GitHubConfig, ImageItem, UploadResult } from '../types';
+import { resolveUploadFileName } from '../utils/filename';
 
 const API_BASE = 'https://api.github.com';
 
@@ -83,14 +84,6 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-function sanitizeFileName(name: string): string {
-  const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
-  const base = name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : name;
-  const safe = base.replace(/[^\w\u4e00-\u9fa5-]+/g, '-').replace(/-+/g, '-');
-  const stamp = Date.now();
-  return `${safe || 'image'}-${stamp}${ext.toLowerCase()}`;
-}
-
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp'];
 
@@ -110,7 +103,7 @@ export async function uploadImage(file: File, customName?: string): Promise<Uplo
 
   const config = getGitHubConfig();
   const dir = config.imagesDir.replace(/^\//, '').replace(/\/$/, '');
-  const fileName = customName?.trim() || sanitizeFileName(file.name);
+  const fileName = resolveUploadFileName(file, customName);
   const path = `${dir}/${fileName}`;
   const content = await fileToBase64(file);
 
