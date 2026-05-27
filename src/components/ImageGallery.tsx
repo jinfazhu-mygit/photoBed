@@ -271,6 +271,21 @@ export default function ImageGallery({ refreshKey }: Props) {
             <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
               刷新
             </Button>
+            <Popconfirm
+              title="确定批量删除？"
+              description={`将永久删除选中的 ${selectedRows.length} 张图片`}
+              onConfirm={handleBatchDelete}
+              disabled={selectedRows.length === 0}
+            >
+              <Button
+                danger
+                disabled={selectedRows.length === 0}
+                loading={deleting}
+                icon={<DeleteOutlined />}
+              >
+                批量删除
+              </Button>
+            </Popconfirm>
           </Space>
         ) : undefined
       }
@@ -291,21 +306,8 @@ export default function ImageGallery({ refreshKey }: Props) {
       )}
 
       {!isMobile && selectedRows.length > 0 && (
-        <div className="gallery-batch-toolbar">
-          <span className="gallery-batch-count">已选择 {selectedRows.length} 项</span>
-          <Popconfirm
-            title="确定批量删除？"
-            description={`将永久删除选中的 ${selectedRows.length} 张图片`}
-            onConfirm={handleBatchDelete}
-          >
-            <Button
-              danger
-              loading={deleting}
-              icon={<DeleteOutlined />}
-            >
-              批量删除
-            </Button>
-          </Popconfirm>
+        <div className="gallery-batch-hint">
+          已选择 {selectedRows.length} 项
         </div>
       )}
 

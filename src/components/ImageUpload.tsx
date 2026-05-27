@@ -311,10 +311,13 @@ export default function ImageUpload({ onUploaded }: Props) {
         <Card
           className="recent-card surface-card"
           title={
-            <span className="recent-title">
-              <CheckCircleOutlined className="recent-title-icon" />
-              最近上传
-            </span>
+            <div className='recent-title-tip'>
+              <span className="recent-title">
+                <CheckCircleOutlined className="recent-title-icon" />
+                最近上传
+              </span>
+              <span className="recent-tip">{'注意：刚上传完成的图片链接需等待1分钟(项目构建)后才能访问'}</span>
+            </div>
           }
           extra={
             !isMobile ? (
@@ -372,9 +375,7 @@ export default function ImageUpload({ onUploaded }: Props) {
                         <Typography.Text strong ellipsis className="recent-item-name">
                           {item.name}
                         </Typography.Text>
-                        <Tag color="success" className="recent-tag">
-                          已上传
-                        </Tag>
+
                       </div>
                       <Typography.Text copyable={{ text: link }} className="recent-link">
                         {link}
@@ -382,6 +383,9 @@ export default function ImageUpload({ onUploaded }: Props) {
                     </div>
                   </div>
                   <div className="recent-item-actions">
+                    <Tag color="success" className="recent-tag">
+                      已上传
+                    </Tag>
                     <Button
                       size="small"
                       type="primary"
