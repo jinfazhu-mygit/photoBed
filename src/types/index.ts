@@ -21,4 +21,5 @@ export interface UploadResult {
   path: string;
   url: string;
   rawUrl: string;
+  tempUrl?: string;
 }

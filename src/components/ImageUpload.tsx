@@ -23,7 +23,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import PreviewableImage from './PreviewableImage';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { uploadImages, validateImageFile } from '../services/github';
-import { getImageExtension, getSuggestedBaseName, stripImageExtension } from '../utils/filename';
+import { getImageExtension, getSuggestedBaseName, resolveUploadFileName, stripImageExtension } from '../utils/filename';
 import type { UploadResult } from '../types';
 
 interface Props {
@@ -159,7 +159,19 @@ export default function ImageUpload({ onUploaded }: Props) {
       );
 
       if (succeeded.length > 0) {
-        setRecent((prev) => [...succeeded, ...prev].slice(0, 8));
+        const resultsWithPreview = succeeded.map((result) => {
+          const pendingItem = pendingItems.find((item) => {
+            const expectedName = item.baseName.trim()
+              ? `${item.baseName.trim()}${getImageExtension(item.file)}`
+              : resolveUploadFileName(item.file);
+            return result.name === expectedName;
+          });
+          return {
+            ...result,
+            tempUrl: pendingItem?.previewUrl,
+          };
+        });
+        setRecent((prev) => [...resultsWithPreview, ...prev].slice(0, 8));
         onUploaded();
         message.success(`成功上传 ${succeeded.length} 张图片`);
         clearPending();
@@ -366,6 +378,7 @@ export default function ImageUpload({ onUploaded }: Props) {
                     <PreviewableImage
                       url={item.url}
                       rawUrl={item.rawUrl}
+                      tempUrl={item.tempUrl}
                       alt={item.name}
                       width={56}
                       height={56}
