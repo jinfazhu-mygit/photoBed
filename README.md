@@ -1,53 +1,43 @@
 # PhotoBed 图床
 
-基于 React + TypeScript + Ant Design 的 GitHub 图床：在网页上传图片到仓库 `images/` 目录，通过 GitHub Pages 访问。
+基于 React + TypeScript + Ant Design 的 GitHub 图床。图片上传到仓库 `images/` 目录，通过 GitHub Pages 访问。
 
 ## 功能
 
-- 拖拽 / 点击上传图片到 GitHub 仓库
-- 图库列表、预览、复制链接（Raw / Pages）
-- 删除仓库中的图片
-- GitHub Actions 自动构建并部署到 GitHub Pages
+- 拖拽 / 批量上传，进度显示
+- 上传后快速复制链接（Pages / Raw / Markdown / HTML）
+- 图库预览、删除、批量管理
+- GitHub Actions 自动部署 Pages
+
+## 首次配置
+
+在 GitHub 仓库 **Settings → Secrets and variables → Actions** 中添加：
+
+| Secret | 说明 |
+|--------|------|
+| `VITE_GITHUB_TOKEN` | Personal Access Token，需 `repo` 权限 |
+
+推送代码后，Workflow 会自动注入 `owner`、`repo`、`branch` 等变量并完成部署。
+
+> Token 会打入前端构建产物，仅适合个人私有图床。请勿在公开仓库使用高权限 Token。
 
 ## 本地开发
 
 ```bash
+cp .env.example .env
+# 编辑 .env 填入你的 GitHub 信息
 npm install
 npm run dev
 ```
 
-## 部署到 GitHub Pages
+## 图片链接
 
-1. 将项目推送到 GitHub 仓库（例如 `photoBed`）。
-2. 仓库 **Settings → Pages → Build and deployment** 中，Source 选择 **GitHub Actions**。
-3. 创建 [Personal Access Token](https://github.com/settings/tokens)（需 `repo` 权限）。
-4. 打开部署后的站点，在 **配置** 中填写用户名、仓库名、分支、`images` 目录和 Token。
-5. 在 **上传** 页面上传图片；每次向 `main` 推送（含 API 上传产生的提交）会触发 [deploy workflow](.github/workflows/deploy.yml)，将 `images/` 同步进 Pages 站点。
-
-### 图片访问地址
-
-| 类型 | 说明 |
+| 类型 | 地址 |
 |------|------|
-| **Raw** | `https://raw.githubusercontent.com/{owner}/{repo}/{branch}/images/{file}`，上传后立即可用 |
-| **Pages** | `https://{owner}.github.io/{repo}/images/{file}`，需在 Actions 部署完成后可用 |
+| **Pages** | `https://{owner}.github.io/{repo}/images/{file}` |
+| **Raw** | `https://raw.githubusercontent.com/{owner}/{repo}/{branch}/images/{file}` |
 
-## 环境变量（可选）
-
-复制 `.env.example` 为 `.env` 可预设仓库信息（Token 建议在页面配置，不要提交到仓库）：
-
-```env
-VITE_DEFAULT_OWNER=your-username
-VITE_DEFAULT_REPO=photoBed
-VITE_DEFAULT_BRANCH=main
-VITE_IMAGES_DIR=images
-```
-
-## 技术栈
-
-- [Vite](https://vitejs.dev/) + React 18 + TypeScript
-- [Ant Design](https://ant.design/)
-- GitHub Contents API
-- GitHub Actions + GitHub Pages
+上传后 Raw 立即可用；Pages 需等待 Actions 部署完成（约 1–2 分钟）。
 
 ## License
 

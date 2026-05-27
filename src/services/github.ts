@@ -1,3 +1,4 @@
+import { getGitHubConfig } from '../config';
 import type { GitHubConfig, ImageItem, UploadResult } from '../types';
 
 const API_BASE = 'https://api.github.com';
@@ -37,7 +38,8 @@ async function parseError(res: Response): Promise<string> {
   }
 }
 
-export async function listImages(config: GitHubConfig): Promise<ImageItem[]> {
+export async function listImages(): Promise<ImageItem[]> {
+  const config = getGitHubConfig();
   const dir = config.imagesDir.replace(/^\//, '').replace(/\/$/, '');
   const url = `${API_BASE}/repos/${config.owner}/${config.repo}/contents/${encodePath(dir)}?ref=${encodeURIComponent(config.branch)}`;
 
@@ -89,11 +91,24 @@ function sanitizeFileName(name: string): string {
   return `${safe || 'image'}-${stamp}${ext.toLowerCase()}`;
 }
 
-export async function uploadImage(
-  config: GitHubConfig,
-  file: File,
-  customName?: string
-): Promise<UploadResult> {
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp'];
+
+export function validateImageFile(file: File): string | null {
+  if (!file.type.startsWith('image/') && !ALLOWED_TYPES.includes(file.type)) {
+    return '仅支持图片文件';
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    return `文件不能超过 ${MAX_FILE_SIZE / 1024 / 1024}MB`;
+  }
+  return null;
+}
+
+export async function uploadImage(file: File, customName?: string): Promise<UploadResult> {
+  const error = validateImageFile(file);
+  if (error) throw new Error(error);
+
+  const config = getGitHubConfig();
   const dir = config.imagesDir.replace(/^\//, '').replace(/\/$/, '');
   const fileName = customName?.trim() || sanitizeFileName(file.name);
   const path = `${dir}/${fileName}`;
@@ -108,17 +123,15 @@ export async function uploadImage(
   }
 
   const putUrl = `${API_BASE}/repos/${config.owner}/${config.repo}/contents/${encodePath(path)}`;
-  const body = {
-    message: `upload: ${fileName}`,
-    content,
-    branch: config.branch,
-    ...(sha ? { sha } : {}),
-  };
-
   const res = await fetch(putUrl, {
     method: 'PUT',
     headers: { ...authHeaders(config.token), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      message: `upload: ${fileName}`,
+      content,
+      branch: config.branch,
+      ...(sha ? { sha } : {}),
+    }),
   });
 
   if (!res.ok) throw new Error(await parseError(res));
@@ -131,7 +144,32 @@ export async function uploadImage(
   };
 }
 
-export async function deleteImage(config: GitHubConfig, item: ImageItem): Promise<void> {
+export async function uploadImages(
+  files: File[],
+  onProgress?: (done: number, total: number) => void
+): Promise<{ succeeded: UploadResult[]; failed: { file: File; error: string }[] }> {
+  const succeeded: UploadResult[] = [];
+  const failed: { file: File; error: string }[] = [];
+  const total = files.length;
+
+  for (let i = 0; i < files.length; i++) {
+    try {
+      const result = await uploadImage(files[i]);
+      succeeded.push(result);
+    } catch (err) {
+      failed.push({
+        file: files[i],
+        error: err instanceof Error ? err.message : '上传失败',
+      });
+    }
+    onProgress?.(i + 1, total);
+  }
+
+  return { succeeded, failed };
+}
+
+export async function deleteImage(item: ImageItem): Promise<void> {
+  const config = getGitHubConfig();
   const url = `${API_BASE}/repos/${config.owner}/${config.repo}/contents/${encodePath(item.path)}`;
   const res = await fetch(url, {
     method: 'DELETE',
@@ -144,14 +182,4 @@ export async function deleteImage(config: GitHubConfig, item: ImageItem): Promis
   });
 
   if (!res.ok) throw new Error(await parseError(res));
-}
-
-export function isConfigValid(config: Partial<GitHubConfig>): config is GitHubConfig {
-  return Boolean(
-    config.owner?.trim() &&
-      config.repo?.trim() &&
-      config.branch?.trim() &&
-      config.token?.trim() &&
-      config.imagesDir?.trim()
-  );
 }

@@ -33,6 +33,11 @@ jobs:
       - name: Build site
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_GITHUB_OWNER: ${{ github.repository_owner }}
+          VITE_GITHUB_REPO: ${{ github.event.repository.name }}
+          VITE_GITHUB_BRANCH: ${{ github.ref_name }}
+          VITE_GITHUB_TOKEN: ${{ secrets.VITE_GITHUB_TOKEN }}
+          VITE_IMAGES_DIR: images
         run: npm run build
 
       - name: Copy images into dist

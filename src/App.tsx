@@ -1,67 +1,64 @@
-import { Layout, Tabs, Typography } from 'antd';
-import { useMemo, useState } from 'react';
-import ConfigPanel from './components/ConfigPanel';
+import { PictureOutlined, UploadOutlined } from '@ant-design/icons';
+import { Alert, Layout, Tabs, Typography } from 'antd';
+import { useState } from 'react';
 import ImageGallery from './components/ImageGallery';
 import ImageUpload from './components/ImageUpload';
-import { isConfigValid } from './services/github';
-import type { GitHubConfig } from './types';
-import { getDefaultConfig } from './utils/storage';
-import type { StoredConfig } from './utils/storage';
+import { isConfigReady } from './config';
 
-const { Header, Content } = Layout;
-
-function toGitHubConfig(stored: StoredConfig): GitHubConfig | null {
-  const config: GitHubConfig = {
-    owner: stored.owner.trim(),
-    repo: stored.repo.trim(),
-    branch: stored.branch.trim() || 'main',
-    token: stored.token?.trim() || '',
-    imagesDir: stored.imagesDir.trim() || 'images',
-  };
-  return isConfigValid(config) ? config : null;
-}
+const { Header, Content, Footer } = Layout;
 
 export default function App() {
-  const [stored, setStored] = useState<StoredConfig>(() => getDefaultConfig());
   const [refreshKey, setRefreshKey] = useState(0);
-  const config = useMemo(() => toGitHubConfig(stored), [stored]);
+  const configReady = isConfigReady();
 
   const items = [
     {
       key: 'upload',
-      label: '上传',
-      children: config ? (
-        <ImageUpload config={config} onUploaded={() => setRefreshKey((k) => k + 1)} />
-      ) : (
-        <Typography.Text type="warning">请先在「配置」中填写并保存 GitHub 信息</Typography.Text>
+      label: (
+        <span>
+          <UploadOutlined /> 上传
+        </span>
       ),
+      children: <ImageUpload onUploaded={() => setRefreshKey((k) => k + 1)} />,
     },
     {
       key: 'gallery',
-      label: '图库',
-      children: config ? (
-        <ImageGallery config={config} refreshKey={refreshKey} />
-      ) : (
-        <Typography.Text type="warning">请先在「配置」中填写并保存 GitHub 信息</Typography.Text>
+      label: (
+        <span>
+          <PictureOutlined /> 图库
+        </span>
       ),
-    },
-    {
-      key: 'config',
-      label: '配置',
-      children: <ConfigPanel initial={stored} onSave={setStored} />,
+      children: <ImageGallery refreshKey={refreshKey} />,
     },
   ];
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ display: 'flex', alignItems: 'center' }}>
-        <Typography.Title level={4} style={{ color: '#fff', margin: 0 }}>
-          PhotoBed 图床
-        </Typography.Title>
+    <Layout className="app-layout">
+      <Header className="app-header">
+        <div className="app-header-inner">
+          <Typography.Title level={4} className="app-title">
+            PhotoBed
+          </Typography.Title>
+          <Typography.Text className="app-subtitle">GitHub 图床</Typography.Text>
+        </div>
       </Header>
-      <Content style={{ padding: 24, maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-        <Tabs items={items} />
+
+      <Content className="app-content">
+        {!configReady && (
+          <Alert
+            type="warning"
+            showIcon
+            className="config-alert"
+            message="环境变量未配置"
+            description="请在 GitHub 仓库 Settings → Secrets 添加 VITE_GITHUB_TOKEN，并在 workflow 中配置仓库信息后再部署。"
+          />
+        )}
+        <Tabs className="app-tabs" items={items} size="large" />
       </Content>
+
+      <Footer className="app-footer">
+        图片存储于 GitHub 仓库 · 由 GitHub Pages 提供访问
+      </Footer>
     </Layout>
   );
 }
