@@ -9,18 +9,21 @@ import {
   Button,
   Card,
   Empty,
-  Image,
+  Pagination,
   Popconfirm,
   Segmented,
   Space,
+  Spin,
   Table,
   Tooltip,
   Typography,
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import PreviewableImage from './PreviewableImage';
 import { deleteImage, listImages } from '../services/github';
+import { useIsMobile } from '../hooks/useIsMobile';
 import type { ImageItem } from '../types';
 
 interface Props {
@@ -28,6 +31,9 @@ interface Props {
 }
 
 type CopyFormat = 'pages' | 'raw' | 'markdown';
+
+const MOBILE_PAGE_SIZE = 8;
+const DESKTOP_PAGE_SIZE = 12;
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -55,12 +61,15 @@ export default function ImageGallery({ refreshKey }: Props) {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [copyFormat, setCopyFormat] = useState<CopyFormat>('pages');
+  const [mobilePage, setMobilePage] = useState(1);
+  const isMobile = useIsMobile();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const list = await listImages();
       setImages(list);
+      setMobilePage(1);
     } catch (err) {
       message.error(err instanceof Error ? err.message : '加载失败');
     } finally {
@@ -82,19 +91,38 @@ export default function ImageGallery({ refreshKey }: Props) {
     }
   };
 
+  const mobilePageData = useMemo(() => {
+    const start = (mobilePage - 1) * MOBILE_PAGE_SIZE;
+    return images.slice(start, start + MOBILE_PAGE_SIZE);
+  }, [images, mobilePage]);
+
+  const copyFormatControl = (
+    <Segmented
+      className="format-segmented"
+      size="small"
+      value={copyFormat}
+      onChange={(v) => setCopyFormat(v as CopyFormat)}
+      options={[
+        { label: 'Pages', value: 'pages' },
+        { label: 'Raw', value: 'raw' },
+        { label: 'MD', value: 'markdown' },
+      ]}
+    />
+  );
+
   const columns: ColumnsType<ImageItem> = [
     {
       title: '预览',
       dataIndex: 'rawUrl',
       width: 88,
-      render: (url: string, record) => (
-        <Image
-          src={url}
+      render: (_, record) => (
+        <PreviewableImage
+          url={record.url}
+          rawUrl={record.rawUrl}
           alt={record.name}
           width={56}
           height={56}
           className="gallery-thumb"
-          style={{ objectFit: 'cover', borderRadius: 8 }}
         />
       ),
     },
@@ -114,7 +142,7 @@ export default function ImageGallery({ refreshKey }: Props) {
       key: 'actions',
       width: 200,
       render: (_, record) => (
-        <Space size={4}>
+        <Space size={4} wrap>
           <Tooltip title="按当前格式复制">
             <Button
               size="small"
@@ -150,41 +178,128 @@ export default function ImageGallery({ refreshKey }: Props) {
     },
   ];
 
+  const renderMobileItem = (item: ImageItem) => (
+    <article key={item.sha} className="gallery-mobile-item">
+      <div className="gallery-mobile-main">
+        <PreviewableImage
+          url={item.url}
+          rawUrl={item.rawUrl}
+          alt={item.name}
+          width={72}
+          height={72}
+          className="gallery-mobile-thumb"
+        />
+        <div className="gallery-mobile-info">
+          <Typography.Text strong className="gallery-mobile-name" ellipsis>
+            {item.name}
+          </Typography.Text>
+          <Typography.Text type="secondary" className="gallery-mobile-size">
+            {formatSize(item.size)}
+          </Typography.Text>
+        </div>
+      </div>
+      <div className="gallery-mobile-actions">
+        <Button
+          type="primary"
+          ghost
+          block
+          icon={<CopyOutlined />}
+          onClick={() => copyText(formatCopy(item, copyFormat))}
+        >
+          复制链接
+        </Button>
+        <Button block icon={<LinkOutlined />} onClick={() => copyText(item.url)}>
+          Pages
+        </Button>
+        <Button
+          block
+          icon={<FileMarkdownOutlined />}
+          onClick={() => copyText(formatCopy(item, 'markdown'))}
+        >
+          MD
+        </Button>
+        <Popconfirm
+          title="确定删除？"
+          description="将从仓库永久删除"
+          onConfirm={() => handleDelete(item)}
+        >
+          <Button block danger icon={<DeleteOutlined />}>
+            删除
+          </Button>
+        </Popconfirm>
+      </div>
+    </article>
+  );
+
   return (
     <Card
-      className="gallery-card"
-      title={`全部图片（${images.length}）`}
+      className="gallery-card surface-card"
+      title={<span className="card-title-text">全部图片（{images.length}）</span>}
       bordered={false}
       extra={
-        <Space>
-          <Segmented
-            size="small"
-            value={copyFormat}
-            onChange={(v) => setCopyFormat(v as CopyFormat)}
-            options={[
-              { label: 'Pages', value: 'pages' },
-              { label: 'Raw', value: 'raw' },
-              { label: 'MD', value: 'markdown' },
-            ]}
-          />
-          <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
-            刷新
-          </Button>
-        </Space>
+        !isMobile ? (
+          <Space wrap className="gallery-toolbar-desktop">
+            {copyFormatControl}
+            <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
+              刷新
+            </Button>
+          </Space>
+        ) : undefined
       }
     >
-      {images.length === 0 && !loading ? (
-        <Empty className="gallery-empty" description="暂无图片，去上传一张吧" />
-      ) : (
-        <Table
-          rowKey="sha"
-          columns={columns}
-          dataSource={images}
-          loading={loading}
-          pagination={{ pageSize: 12, showSizeChanger: true, showTotal: (t) => `共 ${t} 张` }}
-          size="middle"
-        />
+      {isMobile && (
+        <div className="card-toolbar-mobile">
+          {copyFormatControl}
+          <Button
+            className="toolbar-refresh-btn"
+            icon={<ReloadOutlined />}
+            onClick={load}
+            loading={loading}
+            block
+          >
+            刷新列表
+          </Button>
+        </div>
       )}
+
+      <Spin spinning={loading}>
+        {images.length === 0 && !loading ? (
+          <Empty className="gallery-empty" description="暂无图片，去上传一张吧" />
+        ) : isMobile ? (
+          <div className="gallery-mobile-list">
+            {mobilePageData.map(renderMobileItem)}
+            {images.length > MOBILE_PAGE_SIZE && (
+              <Pagination
+                className="gallery-mobile-pagination"
+                current={mobilePage}
+                pageSize={MOBILE_PAGE_SIZE}
+                total={images.length}
+                onChange={setMobilePage}
+                showSizeChanger={false}
+                size="small"
+                showTotal={(t) => `共 ${t} 张`}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="gallery-table-wrap">
+            <Table
+              rowKey="sha"
+              columns={columns}
+              dataSource={images}
+              loading={loading}
+              pagination={{
+                pageSize: DESKTOP_PAGE_SIZE,
+                showSizeChanger: true,
+                showTotal: (t) => `共 ${t} 张`,
+              }}
+              size="middle"
+              scroll={{ x: 640 }}
+            />
+          </div>
+        )}
+      </Spin>
+
       <Typography.Paragraph type="secondary" className="gallery-hint">
         Pages 链接在 GitHub Actions 部署完成后生效；Raw 链接上传后立即可用。
       </Typography.Paragraph>

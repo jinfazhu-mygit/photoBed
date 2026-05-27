@@ -14,7 +14,6 @@ import {
   List,
   Progress,
   Segmented,
-  Space,
   Tag,
   Typography,
   Upload,
@@ -22,6 +21,8 @@ import {
 } from 'antd';
 import type { UploadProps } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import PreviewableImage from './PreviewableImage';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { uploadImages, validateImageFile } from '../services/github';
 import { getImageExtension, getSuggestedBaseName, stripImageExtension } from '../utils/filename';
 import type { UploadResult } from '../types';
@@ -79,6 +80,7 @@ export default function ImageUpload({ onUploaded }: Props) {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [recent, setRecent] = useState<UploadResult[]>([]);
   const [linkFormat, setLinkFormat] = useState<LinkFormat>('pages');
+  const isMobile = useIsMobile();
   const pendingItemsRef = useRef(pendingItems);
   pendingItemsRef.current = pendingItems;
 
@@ -186,15 +188,17 @@ export default function ImageUpload({ onUploaded }: Props) {
 
   return (
     <div className="upload-section">
-      <Card className="upload-card" bordered={false}>
+      <Card className="upload-card surface-card" bordered={false}>
         <div className="upload-card-inner">
           <div className="upload-intro">
-            <PictureOutlined className="upload-intro-icon" />
-            <div>
-              <Typography.Title level={5} style={{ margin: 0 }}>
+            <div className="upload-intro-icon" aria-hidden>
+              <PictureOutlined />
+            </div>
+            <div className="upload-intro-text">
+              <Typography.Title level={5} className="section-title">
                 上传图片
               </Typography.Title>
-              <Typography.Text type="secondary">
+              <Typography.Text type="secondary" className="section-desc">
                 可多次选择图片加入列表，确认后一并上传，单文件最大 25MB
               </Typography.Text>
             </div>
@@ -204,7 +208,9 @@ export default function ImageUpload({ onUploaded }: Props) {
             <p className="ant-upload-drag-icon">
               <CloudUploadOutlined />
             </p>
-            <p className="ant-upload-text">拖拽或点击选择图片（可多次添加）</p>
+            <p className="ant-upload-text">
+              {isMobile ? '点击选择图片（可多次添加）' : '拖拽或点击选择图片（可多次添加）'}
+            </p>
             <p className="ant-upload-hint">JPG · PNG · GIF · WebP · SVG · BMP</p>
           </Upload.Dragger>
 
@@ -296,67 +302,96 @@ export default function ImageUpload({ onUploaded }: Props) {
 
       {recent.length > 0 && (
         <Card
-          className="recent-card"
+          className="recent-card surface-card"
           title={
-            <Space>
-              <CheckCircleOutlined style={{ color: '#52c41a' }} />
-              <span>最近上传</span>
-            </Space>
+            <span className="recent-title">
+              <CheckCircleOutlined className="recent-title-icon" />
+              最近上传
+            </span>
           }
           extra={
-            <Segmented
-              size="small"
-              value={linkFormat}
-              onChange={(v) => setLinkFormat(v as LinkFormat)}
-              options={[
-                { label: 'Pages', value: 'pages' },
-                { label: 'Raw', value: 'raw' },
-                { label: 'MD', value: 'markdown' },
-                { label: 'HTML', value: 'html' },
-              ]}
-            />
+            !isMobile ? (
+              <Segmented
+                className="format-segmented"
+                size="small"
+                value={linkFormat}
+                onChange={(v) => setLinkFormat(v as LinkFormat)}
+                options={[
+                  { label: 'Pages', value: 'pages' },
+                  { label: 'Raw', value: 'raw' },
+                  { label: 'MD', value: 'markdown' },
+                  { label: 'HTML', value: 'html' },
+                ]}
+              />
+            ) : undefined
           }
           bordered={false}
         >
+          {isMobile && (
+            <div className="card-toolbar-mobile recent-toolbar">
+              <Segmented
+                className="format-segmented"
+                block
+                size="small"
+                value={linkFormat}
+                onChange={(v) => setLinkFormat(v as LinkFormat)}
+                options={[
+                  { label: 'Pages', value: 'pages' },
+                  { label: 'Raw', value: 'raw' },
+                  { label: 'MD', value: 'markdown' },
+                  { label: 'HTML', value: 'html' },
+                ]}
+              />
+            </div>
+          )}
           <List
+            className="recent-list"
             dataSource={recent}
             renderItem={(item) => {
               const link = formatLink(item, linkFormat);
               return (
-                <List.Item
-                  actions={[
+                <List.Item className="recent-list-item">
+                  <div className="recent-item-body">
+                    <PreviewableImage
+                      url={item.url}
+                      rawUrl={item.rawUrl}
+                      alt={item.name}
+                      width={56}
+                      height={56}
+                      className="recent-thumb"
+                    />
+                    <div className="recent-item-info">
+                      <div className="recent-item-head">
+                        <Typography.Text strong ellipsis className="recent-item-name">
+                          {item.name}
+                        </Typography.Text>
+                        <Tag color="success" className="recent-tag">
+                          已上传
+                        </Tag>
+                      </div>
+                      <Typography.Text copyable={{ text: link }} className="recent-link">
+                        {link}
+                      </Typography.Text>
+                    </div>
+                  </div>
+                  <div className="recent-item-actions">
                     <Button
-                      key="copy"
-                      type="link"
                       size="small"
+                      type="primary"
+                      ghost
                       icon={<CopyOutlined />}
                       onClick={() => copyText(link)}
                     >
                       复制
-                    </Button>,
+                    </Button>
                     <Button
-                      key="pages"
-                      type="link"
                       size="small"
                       icon={<LinkOutlined />}
                       onClick={() => copyText(item.url)}
                     >
                       Pages
-                    </Button>,
-                  ]}
-                >
-                  <List.Item.Meta
-                    avatar={
-                      <img src={item.rawUrl} alt={item.name} className="recent-thumb" />
-                    }
-                    title={item.name}
-                    description={
-                      <Typography.Text copyable={{ text: link }} ellipsis className="recent-link">
-                        {link}
-                      </Typography.Text>
-                    }
-                  />
-                  <Tag color="success">已上传</Tag>
+                    </Button>
+                  </div>
                 </List.Item>
               );
             }}

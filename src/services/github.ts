@@ -1,6 +1,7 @@
 import { getGitHubConfig } from '../config';
 import type { GitHubConfig, ImageItem, UploadResult } from '../types';
 import { resolveUploadFileName } from '../utils/filename';
+import { encodeUrlPath } from '../utils/imageUrl';
 
 const API_BASE = 'https://api.github.com';
 
@@ -21,13 +22,13 @@ function encodePath(path: string): string {
 
 function buildRawUrl(config: GitHubConfig, path: string): string {
   const { owner, repo, branch } = config;
-  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodeUrlPath(path)}`;
 }
 
 function buildPagesUrl(config: GitHubConfig, path: string): string {
-  const fileName = path.split('/').pop() || path;
   const imagesDir = config.imagesDir.replace(/^\//, '').replace(/\/$/, '');
-  return `https://${config.owner}.github.io/${config.repo}/${imagesDir}/${fileName}`;
+  const fullPath = path.startsWith(`${imagesDir}/`) ? path : `${imagesDir}/${path.split('/').pop() || path}`;
+  return `https://${config.owner}.github.io/${config.repo}/${encodeUrlPath(fullPath)}`;
 }
 
 async function parseError(res: Response): Promise<string> {
@@ -65,7 +66,7 @@ export async function listImages(): Promise<ImageItem[]> {
       sha: item.sha,
       size: item.size,
       url: buildPagesUrl(config, item.path),
-      rawUrl: item.download_url || buildRawUrl(config, item.path),
+      rawUrl: buildRawUrl(config, item.path),
     }))
     .sort((a, b) => b.name.localeCompare(a.name));
 }

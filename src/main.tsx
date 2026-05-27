@@ -12,8 +12,19 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       theme={{
         algorithm: theme.defaultAlgorithm,
         token: {
-          colorPrimary: '#1677ff',
-          borderRadius: 8,
+          colorPrimary: '#2563eb',
+          borderRadius: 10,
+          fontFamily:
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+        },
+        components: {
+          Card: {
+            paddingLG: 20,
+          },
+          Button: {
+            controlHeight: 40,
+            controlHeightLG: 48,
+          },
         },
       }}
     >
