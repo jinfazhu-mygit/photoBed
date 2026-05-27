@@ -5,8 +5,6 @@ import ImageGallery from './components/ImageGallery';
 import ImageUpload from './components/ImageUpload';
 import { isConfigReady } from './config';
 import { useIsMobile } from './hooks/useIsMobile';
-import './styles/layout.css';
-import './styles/tabs.css';
 
 const { Header, Content, Footer } = Layout;
 

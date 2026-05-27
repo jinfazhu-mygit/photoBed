@@ -1,7 +1,6 @@
 import { LockOutlined } from '@ant-design/icons';
 import { Button, Input, Modal, Typography } from 'antd';
 import { useState } from 'react';
-import '../styles/password-modal.css';
 
 const ADMIN_PASSWORD = 'zzfPhotoBed';
 
