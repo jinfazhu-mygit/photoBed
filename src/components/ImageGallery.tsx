@@ -2,7 +2,6 @@ import {
   CopyOutlined,
   DeleteOutlined,
   FileMarkdownOutlined,
-  LinkOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
 import {
@@ -81,6 +80,11 @@ export default function ImageGallery({ refreshKey }: Props) {
     load();
   }, [load, refreshKey]);
 
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(images.length / MOBILE_PAGE_SIZE));
+    if (mobilePage > maxPage) setMobilePage(maxPage);
+  }, [images.length, mobilePage]);
+
   const handleDelete = async (item: ImageItem) => {
     try {
       await deleteImage(item);
@@ -152,13 +156,6 @@ export default function ImageGallery({ refreshKey }: Props) {
               onClick={() => copyText(formatCopy(record, copyFormat))}
             />
           </Tooltip>
-          <Tooltip title="Pages 链接">
-            <Button
-              size="small"
-              icon={<LinkOutlined />}
-              onClick={() => copyText(record.url)}
-            />
-          </Tooltip>
           <Tooltip title="Markdown">
             <Button
               size="small"
@@ -207,9 +204,6 @@ export default function ImageGallery({ refreshKey }: Props) {
           onClick={() => copyText(formatCopy(item, copyFormat))}
         >
           复制链接
-        </Button>
-        <Button block icon={<LinkOutlined />} onClick={() => copyText(item.url)}>
-          Pages
         </Button>
         <Button
           block
@@ -266,21 +260,25 @@ export default function ImageGallery({ refreshKey }: Props) {
         {images.length === 0 && !loading ? (
           <Empty className="gallery-empty" description="暂无图片，去上传一张吧" />
         ) : isMobile ? (
-          <div className="gallery-mobile-list">
-            {mobilePageData.map(renderMobileItem)}
-            {images.length > MOBILE_PAGE_SIZE && (
+          <>
+            <div className="gallery-mobile-list">
+              {mobilePageData.map(renderMobileItem)}
+            </div>
+            {images.length > 0 && (
               <Pagination
                 className="gallery-mobile-pagination"
                 current={mobilePage}
                 pageSize={MOBILE_PAGE_SIZE}
                 total={images.length}
                 onChange={setMobilePage}
+                hideOnSinglePage={false}
+                simple
                 showSizeChanger={false}
                 size="small"
-                showTotal={(t) => `共 ${t} 张`}
+                showTotal={(total) => `共 ${total} 张`}
               />
             )}
-          </div>
+          </>
         ) : (
           <div className="gallery-table-wrap">
             <Table
