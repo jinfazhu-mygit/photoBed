@@ -24,6 +24,7 @@ import PasswordModal from './PasswordModal';
 import { deleteImage, listImages } from '../services/github';
 import { useIsMobile } from '../hooks/useIsMobile';
 import type { ImageItem } from '../types';
+import '../styles/gallery.css';
 
 interface Props {
   refreshKey: number;

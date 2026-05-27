@@ -25,6 +25,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { uploadImages, validateImageFile } from '../services/github';
 import { getImageExtension, getSuggestedBaseName, stripImageExtension } from '../utils/filename';
 import type { UploadResult } from '../types';
+import '../styles/upload.css';
 
 interface Props {
   onUploaded: () => void;

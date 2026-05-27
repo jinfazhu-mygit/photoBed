@@ -1,0 +1,24 @@
+/* ─── Tabs ─── */
+.app-tabs .ant-tabs-nav {
+  margin-bottom: 16px;
+}
+
+.app-tabs .ant-tabs-nav::before {
+  border-color: var(--color-border);
+}
+
+.app-tabs .ant-tabs-tab {
+  font-size: 15px;
+  padding: 10px 4px;
+}
+
+.tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-tabs .ant-tabs-ink-bar {
+  height: 3px;
+  border-radius: 3px;
+}
