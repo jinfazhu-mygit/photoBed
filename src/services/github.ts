@@ -138,6 +138,169 @@ async function getExistingFileNames(config: GitHubConfig): Promise<Set<string>> 
   }
 }
 
+async function calculateSha256(buffer: ArrayBuffer): Promise<string> {
+  const hash = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function getFileBuffer(file: File): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function uploadToLfs(
+  config: GitHubConfig,
+  file: File
+): Promise<{ oid: string; size: number }> {
+  const buffer = await getFileBuffer(file);
+  const oid = await calculateSha256(buffer);
+  const size = buffer.byteLength;
+
+  const batchUrl = `${API_BASE}/repos/${config.owner}/${config.repo}/git/lfs/objects/batch`;
+  const batchRes = await fetch(batchUrl, {
+    method: 'POST',
+    headers: { ...authHeaders(config.token), 'Content-Type': 'application/vnd.git-lfs+json' },
+    body: JSON.stringify({
+      operation: 'upload',
+      transfers: ['basic'],
+      objects: [{ oid, size }],
+    }),
+  });
+
+  if (!batchRes.ok) {
+    const errorData = await batchRes.json();
+    throw new Error(errorData.message || 'LFS batch request failed');
+  }
+
+  const batchData = await batchRes.json();
+  const object = batchData.objects?.[0];
+
+  if (!object || object.error) {
+    throw new Error(object?.error?.message || 'LFS object error');
+  }
+
+  if (object.actions?.upload) {
+    const uploadUrl = object.actions.upload.href;
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: buffer,
+    });
+
+    if (!uploadRes.ok) {
+      throw new Error('LFS upload failed');
+    }
+  }
+
+  return { oid, size };
+}
+
+async function createBlob(config: GitHubConfig, oid: string, size: number): Promise<string> {
+  const blobRes = await fetch(`${API_BASE}/repos/${config.owner}/${config.repo}/git/blobs`, {
+    method: 'POST',
+    headers: { ...authHeaders(config.token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      content: `version https://git-lfs.github.com/spec/v1
+oid sha256:${oid}
+size ${size}`,
+      encoding: 'utf-8',
+    }),
+  });
+
+  if (!blobRes.ok) {
+    throw new Error('Failed to create blob');
+  }
+
+  const blobData = await blobRes.json();
+  return blobData.sha;
+}
+
+async function getTreeSha(config: GitHubConfig): Promise<string> {
+  const url = `${API_BASE}/repos/${config.owner}/${config.repo}/git/trees/${config.branch}`;
+  const res = await fetch(url, { headers: authHeaders(config.token) });
+  if (!res.ok) {
+    throw new Error('Failed to get tree');
+  }
+  const data = await res.json();
+  return data.sha;
+}
+
+async function createTree(
+  config: GitHubConfig,
+  parentTreeSha: string,
+  path: string,
+  blobSha: string
+): Promise<string> {
+  const treeRes = await fetch(`${API_BASE}/repos/${config.owner}/${config.repo}/git/trees`, {
+    method: 'POST',
+    headers: { ...authHeaders(config.token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      base_tree: parentTreeSha,
+      tree: [
+        {
+          path,
+          mode: '100644',
+          type: 'blob',
+          sha: blobSha,
+        },
+      ],
+    }),
+  });
+
+  if (!treeRes.ok) {
+    throw new Error('Failed to create tree');
+  }
+
+  const treeData = await treeRes.json();
+  return treeData.sha;
+}
+
+async function createCommit(
+  config: GitHubConfig,
+  treeSha: string,
+  message: string
+): Promise<string> {
+  const url = `${API_BASE}/repos/${config.owner}/${config.repo}/git/commits`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { ...authHeaders(config.token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message,
+      tree: treeSha,
+      parents: [config.branch],
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to create commit');
+  }
+
+  const data = await res.json();
+  return data.sha;
+}
+
+async function updateRef(config: GitHubConfig, commitSha: string): Promise<void> {
+  const url = `${API_BASE}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { ...authHeaders(config.token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sha: commitSha,
+      force: false,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to update ref');
+  }
+}
+
 export async function uploadImage(file: File, customName?: string): Promise<UploadResult> {
   const error = validateImageFile(file);
   if (error) throw new Error(error);
@@ -161,20 +324,32 @@ export async function uploadImage(file: File, customName?: string): Promise<Uplo
   }
 
   const path = `${dir}/${fileName}`;
-  const content = await fileToBase64(file);
 
-  const putUrl = `${API_BASE}/repos/${config.owner}/${config.repo}/contents/${encodePath(path)}`;
-  const res = await fetch(putUrl, {
-    method: 'PUT',
-    headers: { ...authHeaders(config.token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: `upload: ${fileName}`,
-      content,
-      branch: config.branch,
-    }),
-  });
+  try {
+    // 使用 LFS 上传
+    const { oid, size } = await uploadToLfs(config, file);
+    const blobSha = await createBlob(config, oid, size);
+    const parentTreeSha = await getTreeSha(config);
+    const newTreeSha = await createTree(config, parentTreeSha, path, blobSha);
+    const commitSha = await createCommit(config, newTreeSha, `upload: ${fileName}`);
+    await updateRef(config, commitSha);
+  } catch (lfsError) {
+    // 如果 LFS 上传失败，回退到普通上传
+    console.warn('LFS upload failed, falling back to regular upload:', lfsError);
+    const content = await fileToBase64(file);
+    const putUrl = `${API_BASE}/repos/${config.owner}/${config.repo}/contents/${encodePath(path)}`;
+    const res = await fetch(putUrl, {
+      method: 'PUT',
+      headers: { ...authHeaders(config.token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `upload: ${fileName}`,
+        content,
+        branch: config.branch,
+      }),
+    });
 
-  if (!res.ok) throw new Error(await parseError(res));
+    if (!res.ok) throw new Error(await parseError(res));
+  }
 
   return {
     name: fileName,
