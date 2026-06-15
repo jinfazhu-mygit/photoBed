@@ -328,6 +328,27 @@ async function updateRef(config: GitHubConfig, commitSha: string): Promise<void>
   }
 }
 
+async function triggerPagesDeploy(config: GitHubConfig): Promise<void> {
+  const url = `${API_BASE}/repos/${config.owner}/${config.repo}/actions/workflows/deploy.yml/dispatches`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { ...authHeaders(config.token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ref: config.branch }),
+  });
+
+  if (!res.ok) {
+    throw new Error(await parseError(res));
+  }
+}
+
+async function triggerPagesDeployQuietly(config: GitHubConfig): Promise<void> {
+  try {
+    await triggerPagesDeploy(config);
+  } catch (err) {
+    console.warn('Failed to trigger Pages deploy:', err);
+  }
+}
+
 export async function uploadImage(file: File, customName?: string): Promise<UploadResult> {
   const error = validateImageFile(file);
   if (error) throw new Error(error);
@@ -414,6 +435,10 @@ export async function uploadImages(
     onProgress?.(i + 1, total);
   }
 
+  if (succeeded.length > 0) {
+    await triggerPagesDeployQuietly(getGitHubConfig());
+  }
+
   return { succeeded, failed };
 }
 
@@ -431,4 +456,6 @@ export async function deleteImage(item: ImageItem): Promise<void> {
   });
 
   if (!res.ok) throw new Error(await parseError(res));
+
+  await triggerPagesDeployQuietly(config);
 }
