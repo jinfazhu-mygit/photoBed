@@ -70,8 +70,18 @@ async function copyText(text: string) {
   message.success('已复制');
 }
 
-function revokePreviewUrls(items: Pick<PendingItem, 'previewUrl'>[]) {
-  items.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+function revokeObjectUrl(url?: string) {
+  if (url?.startsWith('blob:')) {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function revokePendingPreviewUrls(items: Pick<PendingItem, 'previewUrl'>[]) {
+  items.forEach((item) => revokeObjectUrl(item.previewUrl));
+}
+
+function revokeRecentPreviewUrls(items: Pick<UploadResult, 'tempUrl'>[]) {
+  items.forEach((item) => revokeObjectUrl(item.tempUrl));
 }
 
 export default function ImageUpload({ onUploaded }: Props) {
@@ -82,15 +92,20 @@ export default function ImageUpload({ onUploaded }: Props) {
   const [linkFormat, setLinkFormat] = useState<LinkFormat>('pages');
   const isMobile = useIsMobile();
   const pendingItemsRef = useRef(pendingItems);
+  const recentRef = useRef(recent);
   pendingItemsRef.current = pendingItems;
+  recentRef.current = recent;
 
   useEffect(() => {
-    return () => revokePreviewUrls(pendingItemsRef.current);
+    return () => {
+      revokePendingPreviewUrls(pendingItemsRef.current);
+      revokeRecentPreviewUrls(recentRef.current);
+    };
   }, []);
 
   const clearPending = useCallback(() => {
     setPendingItems((prev) => {
-      revokePreviewUrls(prev);
+      revokePendingPreviewUrls(prev);
       return [];
     });
   }, []);
@@ -98,7 +113,7 @@ export default function ImageUpload({ onUploaded }: Props) {
   const removePendingItem = useCallback((id: string) => {
     setPendingItems((prev) => {
       const target = prev.find((item) => item.id === id);
-      if (target) revokePreviewUrls([target]);
+      if (target) revokePendingPreviewUrls([target]);
       return prev.filter((item) => item.id !== id);
     });
   }, []);
@@ -159,6 +174,7 @@ export default function ImageUpload({ onUploaded }: Props) {
       );
 
       if (succeeded.length > 0) {
+        const promotedPreviewIds = new Set<string>();
         const resultsWithPreview = succeeded.map((result) => {
           const pendingItem = pendingItems.find((item) => {
             const expectedName = item.baseName.trim()
@@ -166,15 +182,26 @@ export default function ImageUpload({ onUploaded }: Props) {
               : resolveUploadFileName(item.file);
             return result.name === expectedName;
           });
+          if (pendingItem) {
+            promotedPreviewIds.add(pendingItem.id);
+          }
           return {
             ...result,
             tempUrl: pendingItem?.previewUrl,
           };
         });
-        setRecent((prev) => [...resultsWithPreview, ...prev].slice(0, 8));
+        setRecent((prev) => {
+          const next = [...resultsWithPreview, ...prev];
+          const kept = next.slice(0, 8);
+          revokeRecentPreviewUrls(next.slice(8));
+          return kept;
+        });
         onUploaded();
         message.success(`成功上传 ${succeeded.length} 张图片`);
-        clearPending();
+        setPendingItems((prev) => {
+          revokePendingPreviewUrls(prev.filter((item) => !promotedPreviewIds.has(item.id)));
+          return [];
+        });
       }
       failed.forEach(({ file, error }) => message.error(`${file.name}: ${error}`));
     } finally {

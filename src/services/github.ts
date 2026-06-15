@@ -198,6 +198,22 @@ async function uploadToLfs(
     }
   }
 
+  if (object.actions?.verify) {
+    const verifyRes = await fetch(object.actions.verify.href, {
+      method: 'POST',
+      headers: {
+        ...object.actions.verify.header,
+        ...authHeaders(config.token),
+        'Content-Type': 'application/vnd.git-lfs+json',
+      },
+      body: JSON.stringify({ oid, size }),
+    });
+
+    if (!verifyRes.ok) {
+      throw new Error('LFS verify failed');
+    }
+  }
+
   return { oid, size };
 }
 
@@ -229,6 +245,16 @@ async function getTreeSha(config: GitHubConfig): Promise<string> {
   }
   const data = await res.json();
   return data.sha;
+}
+
+async function getHeadCommitSha(config: GitHubConfig): Promise<string> {
+  const url = `${API_BASE}/repos/${config.owner}/${config.repo}/git/ref/heads/${encodePath(config.branch)}`;
+  const res = await fetch(url, { headers: authHeaders(config.token) });
+  if (!res.ok) {
+    throw new Error('Failed to get head ref');
+  }
+  const data = await res.json();
+  return data.object.sha;
 }
 
 async function createTree(
@@ -264,6 +290,7 @@ async function createTree(
 async function createCommit(
   config: GitHubConfig,
   treeSha: string,
+  parentCommitSha: string,
   message: string
 ): Promise<string> {
   const url = `${API_BASE}/repos/${config.owner}/${config.repo}/git/commits`;
@@ -273,7 +300,7 @@ async function createCommit(
     body: JSON.stringify({
       message,
       tree: treeSha,
-      parents: [config.branch],
+      parents: [parentCommitSha],
     }),
   });
 
@@ -329,9 +356,10 @@ export async function uploadImage(file: File, customName?: string): Promise<Uplo
     // 使用 LFS 上传
     const { oid, size } = await uploadToLfs(config, file);
     const blobSha = await createBlob(config, oid, size);
+    const parentCommitSha = await getHeadCommitSha(config);
     const parentTreeSha = await getTreeSha(config);
     const newTreeSha = await createTree(config, parentTreeSha, path, blobSha);
-    const commitSha = await createCommit(config, newTreeSha, `upload: ${fileName}`);
+    const commitSha = await createCommit(config, newTreeSha, parentCommitSha, `upload: ${fileName}`);
     await updateRef(config, commitSha);
   } catch (lfsError) {
     // 如果 LFS 上传失败，回退到普通上传
