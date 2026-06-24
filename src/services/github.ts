@@ -21,34 +21,11 @@ interface PreparedUpload {
   };
 }
 
-interface LfsAction {
-  href: string;
-  header?: Record<string, string>;
-}
-
-interface LfsBatchObject {
-  oid: string;
-  size: number;
-  error?: { message?: string };
-  actions?: {
-    upload?: LfsAction;
-    verify?: LfsAction;
-  };
-}
-
 function authHeaders(token: string): HeadersInit {
   return {
     Accept: 'application/vnd.github.v3+json',
     Authorization: `Bearer ${token}`,
     'X-GitHub-Api-Version': '2022-11-28',
-  };
-}
-
-function lfsHeaders(token: string): HeadersInit {
-  return {
-    ...authHeaders(token),
-    Accept: 'application/vnd.git-lfs+json',
-    'Content-Type': 'application/vnd.git-lfs+json',
   };
 }
 
@@ -63,9 +40,9 @@ function normalizeDir(dir: string): string {
   return dir.replace(/^\//, '').replace(/\/$/, '');
 }
 
-function buildMediaUrl(config: GitHubConfig, path: string): string {
+function buildCdnUrl(config: GitHubConfig, path: string): string {
   const { owner, repo, branch } = config;
-  return `https://media.githubusercontent.com/media/${owner}/${repo}/${branch}/${encodeUrlPath(path)}`;
+  return `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${branch}/${encodeUrlPath(path)}`;
 }
 
 function buildPagesUrl(config: GitHubConfig, path: string): string {
@@ -95,22 +72,6 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
-}
-
-async function getFileBuffer(file: File): Promise<ArrayBuffer> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = reject;
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-async function calculateSha256(buffer: ArrayBuffer): Promise<string> {
-  const hash = await crypto.subtle.digest('SHA-256', buffer);
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
 }
 
 export function validateImageFile(file: File): string | null {
@@ -170,65 +131,6 @@ async function getExistingFileNames(config: GitHubConfig): Promise<Set<string>> 
   }
 }
 
-async function uploadToLfs(config: GitHubConfig, file: File): Promise<{ oid: string; size: number }> {
-  const buffer = await getFileBuffer(file);
-  const oid = await calculateSha256(buffer);
-  const size = buffer.byteLength;
-  const batchUrl = `${API_BASE}/repos/${config.owner}/${config.repo}/git/lfs/objects/batch`;
-
-  const batchRes = await fetch(batchUrl, {
-    method: 'POST',
-    headers: lfsHeaders(config.token),
-    body: JSON.stringify({
-      operation: 'upload',
-      transfers: ['basic'],
-      objects: [{ oid, size }],
-    }),
-  });
-
-  if (!batchRes.ok) {
-    throw new Error(await parseError(batchRes));
-  }
-
-  const batchData = (await batchRes.json()) as { objects?: LfsBatchObject[] };
-  const object = batchData.objects?.[0];
-  if (!object || object.error) {
-    throw new Error(object?.error?.message || 'LFS object upload was rejected');
-  }
-
-  if (object.actions?.upload) {
-    const uploadRes = await fetch(object.actions.upload.href, {
-      method: 'PUT',
-      headers: {
-        ...(object.actions.upload.header || {}),
-        'Content-Type': 'application/octet-stream',
-      },
-      body: buffer,
-    });
-
-    if (!uploadRes.ok) {
-      throw new Error('LFS object upload failed');
-    }
-  }
-
-  if (object.actions?.verify) {
-    const verifyRes = await fetch(object.actions.verify.href, {
-      method: 'POST',
-      headers: {
-        ...lfsHeaders(config.token),
-        ...(object.actions.verify.header || {}),
-      },
-      body: JSON.stringify({ oid, size }),
-    });
-
-    if (!verifyRes.ok) {
-      throw new Error('LFS object verification failed');
-    }
-  }
-
-  return { oid, size };
-}
-
 async function createGitBlob(
   config: GitHubConfig,
   content: string,
@@ -248,26 +150,8 @@ async function createGitBlob(
   return data.sha;
 }
 
-async function createLfsPointerBlob(config: GitHubConfig, oid: string, size: number): Promise<string> {
-  return createGitBlob(
-    config,
-    `version https://git-lfs.github.com/spec/v1\noid sha256:${oid}\nsize ${size}`,
-    'utf-8'
-  );
-}
-
 async function createRegularFileBlob(config: GitHubConfig, file: File): Promise<string> {
   return createGitBlob(config, await fileToBase64(file), 'base64');
-}
-
-async function createUploadBlob(config: GitHubConfig, file: File): Promise<string> {
-  try {
-    const { oid, size } = await uploadToLfs(config, file);
-    return await createLfsPointerBlob(config, oid, size);
-  } catch (err) {
-    console.warn('LFS upload failed, falling back to a regular git blob:', err);
-    return createRegularFileBlob(config, file);
-  }
 }
 
 async function getHeadCommitSha(config: GitHubConfig): Promise<string> {
@@ -390,7 +274,7 @@ export async function listImages(): Promise<ImageItem[]> {
       sha: item.sha,
       size: item.size,
       url: buildPagesUrl(config, item.path),
-      rawUrl: buildMediaUrl(config, item.path),
+      rawUrl: buildCdnUrl(config, item.path),
     }))
     .sort((a, b) => b.name.localeCompare(a.name));
 }
@@ -424,14 +308,14 @@ export async function uploadImages(
       existingNames.add(fileName);
 
       const path = `${dir}/${fileName}`;
-      const sha = await createUploadBlob(config, file);
+      const sha = await createRegularFileBlob(config, file);
       prepared.push({
         file,
         result: {
           name: fileName,
           path,
           url: buildPagesUrl(config, path),
-          rawUrl: buildMediaUrl(config, path),
+          rawUrl: buildCdnUrl(config, path),
         },
         treeEntry: { path, sha },
       });

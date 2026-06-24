@@ -40,8 +40,7 @@ interface PendingItem {
 }
 
 function formatLink(result: UploadResult, format: LinkFormat): string {
-  // 始终使用 rawUrl（Media URL）以支持 LFS 文件
-  const url = result.rawUrl;
+  const url = format === 'pages' ? result.url : result.rawUrl;
   switch (format) {
     case 'markdown':
       return `![${result.name}](${url})`;
@@ -89,7 +88,7 @@ export default function ImageUpload({ onUploaded }: Props) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [recent, setRecent] = useState<UploadResult[]>([]);
-  const [linkFormat, setLinkFormat] = useState<LinkFormat>('pages');
+  const [linkFormat, setLinkFormat] = useState<LinkFormat>('raw');
   const isMobile = useIsMobile();
   const pendingItemsRef = useRef(pendingItems);
   const recentRef = useRef(recent);
@@ -356,7 +355,7 @@ export default function ImageUpload({ onUploaded }: Props) {
                 <CheckCircleOutlined className="recent-title-icon" />
                 最近上传
               </span>
-              <span className="recent-tip">{'注意：刚上传完成的图片链接需等待1分钟(项目构建)后才能访问'}</span>
+              <span className="recent-tip">{'CDN 链接使用 jsDelivr，可直接用于博客图片访问'}</span>
             </div>
           }
           extra={
@@ -368,7 +367,7 @@ export default function ImageUpload({ onUploaded }: Props) {
                 onChange={(v) => setLinkFormat(v as LinkFormat)}
                 options={[
                   { label: 'Pages', value: 'pages' },
-                  { label: 'Raw', value: 'raw' },
+                  { label: 'CDN', value: 'raw' },
                   { label: 'MD', value: 'markdown' },
                   { label: 'HTML', value: 'html' },
                 ]}
@@ -387,7 +386,7 @@ export default function ImageUpload({ onUploaded }: Props) {
                 onChange={(v) => setLinkFormat(v as LinkFormat)}
                 options={[
                   { label: 'Pages', value: 'pages' },
-                  { label: 'Raw', value: 'raw' },
+                  { label: 'CDN', value: 'raw' },
                   { label: 'MD', value: 'markdown' },
                   { label: 'HTML', value: 'html' },
                 ]}

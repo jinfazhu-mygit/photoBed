@@ -41,14 +41,13 @@ function formatSize(bytes: number): string {
 }
 
 function formatCopy(item: ImageItem, format: CopyFormat): string {
-  // 始终使用 rawUrl（Media URL）以支持 LFS 文件
   switch (format) {
     case 'raw':
       return item.rawUrl;
     case 'markdown':
       return `![${item.name}](${item.rawUrl})`;
     default:
-      return item.rawUrl;
+      return item.url;
   }
 }
 
@@ -60,7 +59,7 @@ async function copyText(text: string) {
 export default function ImageGallery({ refreshKey }: Props) {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [copyFormat, setCopyFormat] = useState<CopyFormat>('pages');
+  const [copyFormat, setCopyFormat] = useState<CopyFormat>('raw');
   const [mobilePage, setMobilePage] = useState(1);
   const [selectedRows, setSelectedRows] = useState<ImageItem[]>([]);
   const [deleting, setDeleting] = useState(false);
@@ -160,7 +159,7 @@ export default function ImageGallery({ refreshKey }: Props) {
       onChange={(v) => setCopyFormat(v as CopyFormat)}
       options={[
         { label: 'Pages', value: 'pages' },
-        { label: 'Raw', value: 'raw' },
+        { label: 'CDN', value: 'raw' },
         { label: 'MD', value: 'markdown' },
       ]}
     />
@@ -372,7 +371,7 @@ export default function ImageGallery({ refreshKey }: Props) {
           )}
         </Spin>
         <Typography.Paragraph type="secondary" className="gallery-hint">
-          Pages 链接在 GitHub Actions 部署完成后生效；Raw 链接上传后立即可用。
+          CDN 链接使用 jsDelivr 访问仓库图片；Pages 链接在 GitHub Actions 部署完成后生效。
         </Typography.Paragraph>
       </Card>
 

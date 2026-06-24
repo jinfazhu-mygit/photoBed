@@ -23,7 +23,7 @@ jobs:
         with:
           lfs: true
 
-      - name: Pull LFS files
+      - name: Pull legacy LFS files
         run: git lfs pull
 
       - name: Setup Node
