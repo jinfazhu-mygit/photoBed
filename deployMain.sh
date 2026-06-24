@@ -8,5 +8,5 @@ set -e
 # 进入生成的文件夹
 git pull
 git add .
-git commit -m'上传图片lfs拉取提交'
+git commit -m'git本地同步远程操作'
 git push
