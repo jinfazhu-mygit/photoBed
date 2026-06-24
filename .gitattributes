@@ -1,1 +1,1 @@
-# Images are stored as regular Git blobs so jsDelivr can serve them directly.
+images/** -filter -diff -merge -text
